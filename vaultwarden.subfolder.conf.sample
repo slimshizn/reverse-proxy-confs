@@ -1,6 +1,13 @@
-## Version 2022/02/08
-## Environmental Variable DOMAIN=https://<DOMAIN>/vaultwarden must be set in vaultwarden container including subfolder.
-## This is using ports 80 and 3012
+## Version 2023/11/12
+# make sure that your vaultwarden container is named vaultwarden
+# make sure that vaultwarden is set to work with the base url /vaultwarden/
+# if you are using bitwarden (the official image), use the bitwarden conf
+# if you are using vaultwarden (an unofficial implementation), use the vaultwarden conf
+#
+# vaultwarden defaults to port 80 and can be changed using the environment variable ROCKET_PORT on the vaultwarden container
+#
+# Environmental Variable DOMAIN=https://<DOMAIN>/vaultwarden must be set in vaultwarden container including subfolder.
+
 location /vaultwarden {
     return 301 $scheme://$host/vaultwarden/;
 }
@@ -10,12 +17,14 @@ location ^~ /vaultwarden/ {
     #auth_basic "Restricted";
     #auth_basic_user_file /config/nginx/.htpasswd;
 
-    # enable the next two lines for ldap auth
-    #auth_request /auth;
-    #error_page 401 =200 /ldaplogin;
+    # enable for ldap auth (requires ldap-server.conf in the server block)
+    #include /config/nginx/ldap-location.conf;
 
-    # enable for Authelia
+    # enable for Authelia (requires authelia-server.conf in the server block)
     #include /config/nginx/authelia-location.conf;
+
+    # enable for Authentik (requires authentik-server.conf in the server block)
+    #include /config/nginx/authentik-location.conf;
 
     include /config/nginx/proxy.conf;
     include /config/nginx/resolver.conf;
@@ -26,18 +35,37 @@ location ^~ /vaultwarden/ {
 
 }
 
-location ~ (/vaultwarden)?/admin {
+location ~  ^(/vaultwarden)?/admin {
     # enable the next two lines for http auth
     #auth_basic "Restricted";
     #auth_basic_user_file /config/nginx/.htpasswd;
 
-    # enable the next two lines for ldap auth
-    #auth_request /auth;
-    #error_page 401 =200 /ldaplogin;
+    # enable for ldap auth (requires ldap-server.conf in the server block)
+    #include /config/nginx/ldap-location.conf;
 
-    # enable for Authelia
+    # enable for Authelia (requires authelia-server.conf in the server block)
     #include /config/nginx/authelia-location.conf;
 
+    # enable for Authentik (requires authentik-server.conf in the server block)
+    #include /config/nginx/authentik-location.conf;
+
+    # if you enable admin page via ADMIN_TOKEN env variable
+    # consider restricting access to LAN only via uncommenting the following lines
+    #allow 10.0.0.0/8;
+    #allow 172.16.0.0/12;
+    #allow 192.168.0.0/16;
+    #deny all;
+
+    include /config/nginx/proxy.conf;
+    include /config/nginx/resolver.conf;
+    set $upstream_app vaultwarden;
+    set $upstream_port 80;
+    set $upstream_proto http;
+    proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+
+}
+
+location ~ (/vaultwarden)?/api {
     include /config/nginx/proxy.conf;
     include /config/nginx/resolver.conf;
     set $upstream_app vaultwarden;
@@ -48,16 +76,6 @@ location ~ (/vaultwarden)?/admin {
 }
 
 location ~ (/vaultwarden)?/notifications/hub {
-    include /config/nginx/proxy.conf;
-    include /config/nginx/resolver.conf;
-    set $upstream_app vaultwarden;
-    set $upstream_port 3012;
-    set $upstream_proto http;
-    proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-
-}
-
-location ~ (/vaultwarden)?/notifications/hub/negotiate {
     include /config/nginx/proxy.conf;
     include /config/nginx/resolver.conf;
     set $upstream_app vaultwarden;
